@@ -334,6 +334,9 @@ def crop_video_to_primary_person(
     debug_video_path: Optional[Path] = None,
 ) -> bool:
     destination.parent.mkdir(parents=True, exist_ok=True)
+    destination = destination.with_suffix(".mp4")
+    if debug_video_path is not None:
+        debug_video_path = debug_video_path.with_suffix(".mp4")
 
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
@@ -415,6 +418,9 @@ def crop_video_to_primary_person(
         fps,
         (crop_width, crop_height),
     )
+    if not writer.isOpened():
+        return False
+
     debug_writer = None
     if debug_video_path is not None:
         debug_video_path.parent.mkdir(parents=True, exist_ok=True)
@@ -424,6 +430,9 @@ def crop_video_to_primary_person(
             fps,
             (frame_width, frame_height),
         )
+        if not debug_writer.isOpened():
+            writer.release()
+            return False
 
     last_crop = None
     for frame, frame_tracks in zip(frames, per_frame_tracks):
