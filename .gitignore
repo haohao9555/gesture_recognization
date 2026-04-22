@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+
+.vscode/
+.idea/
+
+checkpoints/
+data/
+dataset/
+dataset_frames/
+
+*.pth
+*.pt
+*.ckpt
+
+*.zip
