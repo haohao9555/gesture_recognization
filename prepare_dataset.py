@@ -233,6 +233,10 @@ def copy_video(video_path: Path, destination: Path) -> None:
     shutil.copy2(video_path, destination)
 
 
+def get_processed_video_path(destination: Path, use_yolo_crop: bool) -> Path:
+    return destination.with_suffix(".mp4") if use_yolo_crop else destination
+
+
 def build_yolo_model(model_name: str):
     try:
         from ultralytics import YOLO
@@ -386,11 +390,19 @@ def crop_video_to_primary_person(
 
     capture.release()
 
+    if not frames:
+        print(f"[skip] No readable frames in source video: {video_path}")
+        return False
+
     for stats in track_stats.values():
         stats["avg_area"] = stats["total_area"] / stats["count"]
 
     target_track_id = select_primary_track(track_stats)
     if target_track_id is None or track_stats[target_track_id]["count"] < min_tracked_frames:
+        print(
+            f"[skip] No stable tracked person found in {video_path.name} "
+            f"(min_tracked_frames={min_tracked_frames})"
+        )
         return False
 
     first_box = None
@@ -411,6 +423,12 @@ def crop_video_to_primary_person(
     )
     crop_width = max(1, right - left)
     crop_height = max(1, bottom - top)
+    if crop_width % 2 != 0:
+        crop_width -= 1
+    if crop_height % 2 != 0:
+        crop_height -= 1
+    crop_width = max(2, crop_width)
+    crop_height = max(2, crop_height)
 
     writer = cv2.VideoWriter(
         str(destination),
@@ -419,6 +437,7 @@ def crop_video_to_primary_person(
         (crop_width, crop_height),
     )
     if not writer.isOpened():
+        print(f"[skip] Failed to open VideoWriter for: {destination}")
         return False
 
     debug_writer = None
@@ -432,9 +451,11 @@ def crop_video_to_primary_person(
         )
         if not debug_writer.isOpened():
             writer.release()
+            print(f"[skip] Failed to open debug VideoWriter for: {debug_video_path}")
             return False
 
     last_crop = None
+    written_frames = 0
     for frame, frame_tracks in zip(frames, per_frame_tracks):
         if target_track_id in frame_tracks:
             left, top, right, bottom = expand_box(
@@ -449,6 +470,7 @@ def crop_video_to_primary_person(
                 last_crop = crop
         if last_crop is not None:
             writer.write(last_crop)
+            written_frames += 1
         if debug_writer is not None:
             debug_frame = draw_debug_overlay(frame, frame_tracks, target_track_id)
             debug_writer.write(debug_frame)
@@ -456,7 +478,16 @@ def crop_video_to_primary_person(
     writer.release()
     if debug_writer is not None:
         debug_writer.release()
-    return destination.exists() and destination.stat().st_size > 0
+
+    if written_frames == 0:
+        print(f"[skip] No cropped frames were written for: {video_path.name}")
+        return False
+
+    if not destination.exists() or destination.stat().st_size == 0:
+        print(f"[skip] Output video was not created correctly: {destination}")
+        return False
+
+    return True
 
 
 def prepare_video_for_split(
@@ -545,6 +576,9 @@ def main():
             )
             for video_path in video_progress:
                 video_destination = split_videos_dir / split_name / class_name / video_path.name
+                processed_video_path = get_processed_video_path(
+                    video_destination, args.use_yolo_crop
+                )
                 ok = prepare_video_for_split(
                     video_path=video_path,
                     destination=video_destination,
@@ -570,7 +604,7 @@ def main():
                 sample_name = video_path.stem
                 frame_output_dir = split_frames_dir / split_name / class_name / sample_name
                 frames = extract_frames_from_video(
-                    video_path=video_destination,
+                    video_path=processed_video_path,
                     num_frames=args.num_frames,
                     frame_size=args.frame_size,
                 )
