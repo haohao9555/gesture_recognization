@@ -71,26 +71,52 @@ These are the most important tensor shapes in the model:
 pip install -r requirements.txt
 ```
 
-## Prepare Your Own Zip Dataset
+## Prepare Your Own Dataset
 
-If you have a zip file that already contains class folders with videos, you can import it into this project and generate both:
+You can prepare the dataset from either:
+
+- a zip file containing class folders with videos
+- a directory containing class folders with videos
+
+The script can also optionally crop the main person in each video using YOLO tracking. It selects the person who stays visible for the longest time, and breaks ties by choosing the larger average bounding box.
+
+This generates both:
 
 - split videos under `dataset/train|val|test`
 - extracted 16-frame samples under `dataset_frames/train|val|test`
 
-Run:
+Run from a zip file:
 
 ```bash
 python prepare_dataset.py --zip-path "D:\path\to\your_dataset.zip" --project-dir . --force
 ```
 
+Run from an existing raw video folder:
+
+```bash
+python prepare_dataset.py --source-dir "D:\path\to\Gesture_video" --project-dir . --force
+```
+
+Run with YOLO person cropping:
+
+```bash
+python prepare_dataset.py \
+  --source-dir "D:\path\to\Gesture_video" \
+  --project-dir . \
+  --use-yolo-crop \
+  --yolo-model yolov8n.pt \
+  --min-tracked-frames 10 \
+  --force
+```
+
 This script will:
 
-1. extract the zip into `data/raw_extracted`
+1. optionally extract the zip into `data/raw_extracted`
 2. detect class folders automatically
 3. split each class into train/val/test
-4. sample exactly 16 frames from every video
-5. save frames as `.jpg`
+4. optionally crop each video around the main tracked person
+5. sample exactly 16 frames from every processed video
+6. save frames as `.jpg`
 
 ## Train
 
