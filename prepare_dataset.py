@@ -1,5 +1,6 @@
 import argparse
 import random
+import subprocess
 import shutil
 import zipfile
 from collections import defaultdict
@@ -235,6 +236,47 @@ def copy_video(video_path: Path, destination: Path) -> None:
 
 def get_processed_video_path(destination: Path, use_yolo_crop: bool) -> Path:
     return destination.with_suffix(".mp4") if use_yolo_crop else destination
+
+
+def transcode_video_for_web_playback(video_path: Path) -> bool:
+    ffmpeg_path = shutil.which("ffmpeg")
+    if ffmpeg_path is None:
+        print(f"[warn] ffmpeg not found, keeping original codec for: {video_path.name}")
+        return video_path.exists() and video_path.stat().st_size > 0
+
+    if not video_path.exists() or video_path.stat().st_size == 0:
+        return False
+
+    temp_output_path = video_path.with_name(f"{video_path.stem}_h264{video_path.suffix}")
+    command = [
+        ffmpeg_path,
+        "-y",
+        "-i",
+        str(video_path),
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        str(temp_output_path),
+    ]
+
+    result = subprocess.run(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(f"[warn] Failed to transcode {video_path.name} to H.264.")
+        return False
+
+    if not temp_output_path.exists() or temp_output_path.stat().st_size == 0:
+        return False
+
+    temp_output_path.replace(video_path)
+    return True
 
 
 def build_yolo_model(model_name: str):
@@ -486,6 +528,13 @@ def crop_video_to_primary_person(
     if not destination.exists() or destination.stat().st_size == 0:
         print(f"[skip] Output video was not created correctly: {destination}")
         return False
+
+    if not transcode_video_for_web_playback(destination):
+        print(f"[warn] Keeping original output video codec for: {destination.name}")
+
+    if debug_video_path is not None and debug_video_path.exists():
+        if not transcode_video_for_web_playback(debug_video_path):
+            print(f"[warn] Keeping original debug video codec for: {debug_video_path.name}")
 
     return True
 
