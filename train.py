@@ -25,6 +25,24 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=10, help="Number of training epochs.")
     parser.add_argument("--batch-size", type=int, default=8, help="Batch size.")
     parser.add_argument("--lr", type=float, default=0.001, help="Initial learning rate.")
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=1e-4,
+        help="Weight decay regularization for Adam.",
+    )
+    parser.add_argument(
+        "--dropout",
+        type=float,
+        default=0.5,
+        help="Dropout applied before the classifier.",
+    )
+    parser.add_argument(
+        "--hidden-dim",
+        type=int,
+        default=128,
+        help="LSTM hidden dimension.",
+    )
     parser.add_argument("--num-frames", type=int, default=16, help="Frames sampled per video.")
     parser.add_argument("--frame-size", type=int, default=224, help="Frame height/width.")
     parser.add_argument("--num-workers", type=int, default=0, help="DataLoader workers.")
@@ -124,17 +142,22 @@ def main():
 
     model = CNNLSTM(
         num_classes=num_classes,
+        hidden_dim=args.hidden_dim,
+        dropout=args.dropout,
         pretrained_cnn=args.pretrained_cnn,
         freeze_cnn=args.freeze_cnn,
     ).to(device)
     criterion = nn.CrossEntropyLoss()
     trainable_parameters = [param for param in model.parameters() if param.requires_grad]
-    optimizer = Adam(trainable_parameters, lr=args.lr)
+    optimizer = Adam(trainable_parameters, lr=args.lr, weight_decay=args.weight_decay)
 
     total_params = sum(param.numel() for param in model.parameters())
     trainable_params = sum(param.numel() for param in trainable_parameters)
     print(f"Pretrained CNN: {args.pretrained_cnn}")
     print(f"Frozen CNN: {args.freeze_cnn}")
+    print(f"Hidden dim: {args.hidden_dim}")
+    print(f"Dropout: {args.dropout}")
+    print(f"Weight decay: {args.weight_decay}")
     print(f"Trainable parameters: {trainable_params:,} / {total_params:,}")
 
     checkpoint_path = Path(args.checkpoint_path)
