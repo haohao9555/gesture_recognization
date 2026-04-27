@@ -29,6 +29,18 @@ def parse_args():
     parser.add_argument("--frame-size", type=int, default=224, help="Frame height/width.")
     parser.add_argument("--num-workers", type=int, default=0, help="DataLoader workers.")
     parser.add_argument(
+        "--pretrained-cnn",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use ImageNet-pretrained ResNet18 weights. Enabled by default.",
+    )
+    parser.add_argument(
+        "--freeze-cnn",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Freeze the CNN backbone and train only the LSTM/classifier. Enabled by default.",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default="auto",
@@ -110,9 +122,20 @@ def main():
         pin_memory=torch.cuda.is_available(),
     )
 
-    model = CNNLSTM(num_classes=num_classes).to(device)
+    model = CNNLSTM(
+        num_classes=num_classes,
+        pretrained_cnn=args.pretrained_cnn,
+        freeze_cnn=args.freeze_cnn,
+    ).to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = Adam(model.parameters(), lr=args.lr)
+    trainable_parameters = [param for param in model.parameters() if param.requires_grad]
+    optimizer = Adam(trainable_parameters, lr=args.lr)
+
+    total_params = sum(param.numel() for param in model.parameters())
+    trainable_params = sum(param.numel() for param in trainable_parameters)
+    print(f"Pretrained CNN: {args.pretrained_cnn}")
+    print(f"Frozen CNN: {args.freeze_cnn}")
+    print(f"Trainable parameters: {trainable_params:,} / {total_params:,}")
 
     checkpoint_path = Path(args.checkpoint_path)
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torchvision.models import resnet18
+from torchvision.models import ResNet18_Weights, resnet18
 
 
 class CNNLSTM(nn.Module):
@@ -29,14 +29,21 @@ class CNNLSTM(nn.Module):
         hidden_dim: int = 256,
         lstm_layers: int = 1,
         dropout: float = 0.3,
+        pretrained_cnn: bool = True,
+        freeze_cnn: bool = True,
     ) -> None:
         super().__init__()
 
-        backbone = resnet18(weights=None)
+        weights = ResNet18_Weights.IMAGENET1K_V1 if pretrained_cnn else None
+        backbone = resnet18(weights=weights)
         feature_dim = backbone.fc.in_features
         backbone.fc = nn.Identity()
 
         self.cnn = backbone
+        if freeze_cnn:
+            for param in self.cnn.parameters():
+                param.requires_grad = False
+
         self.feature_dim = feature_dim
         self.hidden_dim = hidden_dim
         self.lstm_layers = lstm_layers
